@@ -1,7 +1,7 @@
 python-telegram-bot==20.8
-deep-translator
-speechrecognition
-pydub
-gTTS
-flask
-python-dotenv
+deep-translator==1.11.4
+SpeechRecognition==3.10.0
+pydub==0.25.1
+gTTS==2.5.4
+flask==3.0.3
+python-dotenv==1.0.1
