@@ -5,6 +5,8 @@ from PIL import Image
 import pytesseract
 from pydub import AudioSegment
 from gtts import gTTS
+from threading import Thread  # Render үшін қосылды
+from flask import Flask        # Render үшін қосылды
 
 from telegram import (
     Update,
@@ -26,12 +28,24 @@ from deep_translator import GoogleTranslator
 # ================= CONFIG =================
 load_dotenv()
 
+# Render үшін
 TOKEN = os.getenv("BOT_TOKEN")
 
-# Tesseract жолы
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-)
+# ================= FLASK SERVER (RENDER ҮШІН) =================
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Бот сәтті іске қосылды және жұмыс істеп тұр!"
+
+def run_flask():
+    # Render автоматты түрде беретін портты оқимыз, әйтпесе 8080 қолданылады
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.start()
 
 # ================= ТІЛДЕР =================
 ALL_LANGUAGES = {
@@ -45,13 +59,10 @@ ALL_LANGUAGES = {
 
 # ================= КНОПКА =================
 def get_language_keyboard():
-
     keyboard = []
-
     row = []
 
     for code, name in ALL_LANGUAGES.items():
-
         row.append(
             InlineKeyboardButton(
                 name,
@@ -70,20 +81,16 @@ def get_language_keyboard():
 
 # ================= АУДАРМА =================
 async def process_translation(update, context, text):
-
     target_lang = context.user_data.get("lang")
 
     if not target_lang:
-
         await update.message.reply_text(
             "⚠️ Алдымен тілді таңдаңыз!",
             reply_markup=get_language_keyboard()
         )
-
         return
 
     try:
-
         translated = GoogleTranslator(
             source="auto",
             target=target_lang
@@ -91,7 +98,7 @@ async def process_translation(update, context, text):
 
         # Мәтін шығару
         await update.message.reply_text(
-            f"🌍 Аударма:\n{translated}"
+            "🌍 Аударма:\n" + str(translated)
         )
 
         # Voice жасау
@@ -101,7 +108,6 @@ async def process_translation(update, context, text):
         )
 
         voice_path = "voice.mp3"
-
         tts.save(voice_path)
 
         # Voice жіберу
@@ -113,17 +119,14 @@ async def process_translation(update, context, text):
             os.remove(voice_path)
 
     except Exception as e:
-
         await update.message.reply_text(
             f"❌ Қате: {e}"
         )
 
 # ================= TEXT / PHOTO =================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     # TEXT
     if update.message.text:
-
         await process_translation(
             update,
             context,
@@ -132,47 +135,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # PHOTO
     elif update.message.photo or update.message.document:
-
         if update.message.document:
-
             mime_type = update.message.document.mime_type
-
             if not mime_type.startswith("image/"):
-
                 await update.message.reply_text(
                     "❌ Бұл сурет емес."
                 )
-
                 return
-
             file = await update.message.document.get_file()
-
         else:
             file = await update.message.photo[-1].get_file()
 
         path = "temp.jpg"
-
         await file.download_to_drive(path)
 
         try:
-
             extracted_text = pytesseract.image_to_string(
-                Image.open(path),
-                lang="kaz+rus+eng"
+                Image.open(path)
             )
 
             if not extracted_text.strip():
-
                 await update.message.reply_text(
                     "❌ Мәтін табылмады."
                 )
-
             else:
-
                 await update.message.reply_text(
                     f"🔍 Танылған мәтін:\n{extracted_text}"
                 )
-
                 await process_translation(
                     update,
                     context,
@@ -180,19 +169,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
         except Exception as e:
-
             await update.message.reply_text(
                 f"❌ Қате: {e}"
             )
-
         finally:
-
             if os.path.exists(path):
                 os.remove(path)
 
 # ================= VOICE =================
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     voice = await update.message.voice.get_file()
 
     ogg_path = "voice.ogg"
@@ -201,18 +186,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await voice.download_to_drive(ogg_path)
 
     try:
-
         # OGG -> WAV
         audio = AudioSegment.from_ogg(ogg_path)
-
         audio.export(wav_path, format="wav")
 
         recognizer = sr.Recognizer()
-
         with sr.AudioFile(wav_path) as source:
-
             audio_data = recognizer.record(source)
-
             text = recognizer.recognize_google(audio_data)
 
         await update.message.reply_text(
@@ -227,22 +207,17 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     except Exception as e:
-
         await update.message.reply_text(
             f"❌ Voice қате: {e}"
         )
-
     finally:
-
         if os.path.exists(ogg_path):
             os.remove(ogg_path)
-
         if os.path.exists(wav_path):
             os.remove(wav_path)
 
 # ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     await update.message.reply_text(
         "🌍 Тілді таңдаңыз:",
         reply_markup=get_language_keyboard()
@@ -250,35 +225,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================= CALLBACK =================
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     query = update.callback_query
-
     await query.answer()
 
     if query.data.startswith("setlang_"):
-
         lang = query.data.split("_")[1]
-
         context.user_data["lang"] = lang
-
         await query.edit_message_text(
             f"✅ Таңдалған тіл: {ALL_LANGUAGES[lang]}"
         )
 
 # ================= MAIN =================
 def main():
+    if not TOKEN:
+        print("❌ BOT_TOKEN табылмады")
+        return
 
-    app = Application.builder().token(TOKEN).build()
+    app_telegram = Application.builder().token(TOKEN).build()
 
-    app.add_handler(
+    app_telegram.add_handler(
         CommandHandler("start", start)
     )
 
-    app.add_handler(
+    app_telegram.add_handler(
         CallbackQueryHandler(callback_handler)
     )
 
-    app.add_handler(
+    app_telegram.add_handler(
         MessageHandler(
             filters.TEXT |
             filters.PHOTO |
@@ -287,7 +260,7 @@ def main():
         )
     )
 
-    app.add_handler(
+    app_telegram.add_handler(
         MessageHandler(
             filters.VOICE,
             handle_voice
@@ -295,8 +268,12 @@ def main():
     )
 
     print("🤖 AI Translator Bot іске қосылды...")
+    
+    # Render портты тексергенде қате бермес үшін веб-серверді қосамыз
+    keep_alive()
 
-    app.run_polling()
+    # Ботты қосу
+    app_telegram.run_polling()
 
 # ================= RUN =================
 if __name__ == "__main__":
