@@ -6,3 +6,4 @@ pillow
 pytesseract
 pydub
 gtts
+flask
