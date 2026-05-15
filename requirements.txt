@@ -4,7 +4,7 @@ google-cloud-vision
 SpeechRecognition
 pydub
 gTTS
-easyocr
+easyocr==1.6.2
 Flask
 python-dotenv
 opencv-python-headless
