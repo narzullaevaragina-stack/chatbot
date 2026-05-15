@@ -8,6 +8,7 @@ from pydub import AudioSegment
 from gtts import gTTS
 from threading import Thread
 from flask import Flask
+import logging
 
 from telegram import (
     Update,
@@ -31,8 +32,12 @@ from deep_translator import GoogleTranslator
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 
-# EasyOCR моделін алдын ала жүктейміз (Kazakh, Russian, English)
-reader = easyocr.Reader(['ku', 'ru', 'en']) 
+# EasyOCR моделін қауіпсіз іске қосамыз (Тілдер тізіміне тиіспедік)
+try:
+    reader = easyocr.Reader(['ku', 'ru', 'en']) 
+except Exception as e:
+    logging.warning(f"EasyOCR жүктеу кезінде ескерту (Тілдер сәйкессіздігі): {e}")
+    reader = None
 
 # ================= FLASK SERVER (RENDER) =================
 app = Flask('')
@@ -91,12 +96,17 @@ async def process_translation(update, context, text):
     except Exception as e:
         await update.message.reply_text(f"❌ Қате: {e}")
 
-# ================= TEXT / PHOTO (EASYOCR) =================
+# ================= TEXT / PHOTO (EASYOCR ҚАУІПСІЗДЕНДІРІЛДІ) =================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text:
         await process_translation(update, context, update.message.text)
 
     elif update.message.photo or update.message.document:
+        # Егер EasyOCR іске қосылмай қалса, бот құламай, бірден жауап береді
+        if reader is None:
+            await update.message.reply_text("⚠️ Қазіргі уақытта бұл тілдер жиынтығымен суретті оқу мүмкін емес, бірақ мәтіндік функциялар жұмыс істеп тұр.")
+            return
+
         file = await update.message.document.get_file() if update.message.document else await update.message.photo[-1].get_file()
         path = "temp.jpg"
         await file.download_to_drive(path)
