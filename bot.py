@@ -1,14 +1,10 @@
 import os
 import speech_recognition as sr
 from dotenv import load_dotenv
-from PIL import Image
-import easyocr  # Pytesseract орнына EasyOCR
-import numpy as np
 from pydub import AudioSegment
 from gtts import gTTS
 from threading import Thread
 from flask import Flask
-import logging
 
 from telegram import (
     Update,
@@ -31,13 +27,6 @@ from deep_translator import GoogleTranslator
 # ================= CONFIG =================
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-
-# EasyOCR моделін қауіпсіз іске қосамыз (Тілдер тізіміне тиіспедік)
-try:
-    reader = easyocr.Reader(['ku', 'ru', 'en']) 
-except Exception as e:
-    logging.warning(f"EasyOCR жүктеу кезінде ескерту (Тілдер сәйкессіздігі): {e}")
-    reader = None
 
 # ================= FLASK SERVER (RENDER) =================
 app = Flask('')
@@ -96,35 +85,12 @@ async def process_translation(update, context, text):
     except Exception as e:
         await update.message.reply_text(f"❌ Қате: {e}")
 
-# ================= TEXT / PHOTO (EASYOCR ҚАУІПСІЗДЕНДІРІЛДІ) =================
+# ================= МӘТІНДІ ӨҢДЕУ (СУРЕТСІЗ) =================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text:
         await process_translation(update, context, update.message.text)
-
     elif update.message.photo or update.message.document:
-        # Егер EasyOCR іске қосылмай қалса, бот құламай, бірден жауап береді
-        if reader is None:
-            await update.message.reply_text("⚠️ Қазіргі уақытта бұл тілдер жиынтығымен суретті оқу мүмкін емес, бірақ мәтіндік функциялар жұмыс істеп тұр.")
-            return
-
-        file = await update.message.document.get_file() if update.message.document else await update.message.photo[-1].get_file()
-        path = "temp.jpg"
-        await file.download_to_drive(path)
-
-        try:
-            # EasyOCR арқылы мәтінді оқу
-            results = reader.readtext(path, detail=0)
-            extracted_text = " ".join(results)
-
-            if not extracted_text.strip():
-                await update.message.reply_text("❌ Мәтін табылмады.")
-            else:
-                await update.message.reply_text(f"🔍 Танылған мәтін:\n{extracted_text}")
-                await process_translation(update, context, extracted_text)
-        except Exception as e:
-            await update.message.reply_text(f"❌ OCR Қате: {e}")
-        finally:
-            if os.path.exists(path): os.remove(path)
+        await update.message.reply_text("⚠️ Кешіріңіз, суретті оқу функциясы өшірілген. Тек мәтін немесе дауыстық хабарлама жіберіңіз.")
 
 # ================= VOICE =================
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
