@@ -4,3 +4,4 @@ speechrecognition
 pydub
 gTTS
 flask
+python-dotenv
