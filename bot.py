@@ -31,7 +31,7 @@ load_dotenv()
 # Render үшін
 TOKEN = os.getenv("BOT_TOKEN")
 
-# ================= FLASK SERVER (RENDER ҮШІН) =================
+# ================= FLASK SERVER (RENDER) =================
 app = Flask('')
 
 @app.route('/')
@@ -39,7 +39,6 @@ def home():
     return "Бот сәтті іске қосылды және жұмыс істеп тұр!"
 
 def run_flask():
-    # Render автоматты түрде беретін портты оқимыз, әйтпесе 8080 қолданылады
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
@@ -55,6 +54,8 @@ ALL_LANGUAGES = {
     "tr": "Türkçe 🇹🇷",
     "de": "Deutsch 🇩🇪",
     "fr": "Français 🇫🇷",
+    "ja": "Жапония 🇯🇵",  # Жапония тілі қосылды
+    "ko": "Корея 🇰🇷",    # Корея тілі қосылды
 }
 
 # ================= КНОПКА =================
@@ -96,27 +97,28 @@ async def process_translation(update, context, text):
             target=target_lang
         ).translate(text)
 
-        # Мәтін шығару
+        # Мәтінді шығару
         await update.message.reply_text(
             "🌍 Аударма:\n" + str(translated)
         )
 
-        # Voice жасау
+        # ====== ДАУЫСТЫҚ ЖАУАП ҚАЙТА ҚОСЫЛДЫ ======
         tts = gTTS(
             text=translated,
             lang=target_lang
         )
-
+        
         voice_path = "voice.mp3"
         tts.save(voice_path)
-
-        # Voice жіберу
+        
+        # Дауыстық хабарламаны жіберу
         with open(voice_path, "rb") as audio:
             await update.message.reply_voice(audio)
-
-        # Файл өшіру
+            
+        # Уақытша файлды өшіру
         if os.path.exists(voice_path):
             os.remove(voice_path)
+        # ===============================================
 
     except Exception as e:
         await update.message.reply_text(
@@ -125,7 +127,6 @@ async def process_translation(update, context, text):
 
 # ================= TEXT / PHOTO =================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # TEXT
     if update.message.text:
         await process_translation(
             update,
@@ -133,7 +134,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update.message.text
         )
 
-    # PHOTO
     elif update.message.photo or update.message.document:
         if update.message.document:
             mime_type = update.message.document.mime_type
@@ -186,7 +186,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await voice.download_to_drive(ogg_path)
 
     try:
-        # OGG -> WAV
         audio = AudioSegment.from_ogg(ogg_path)
         audio.export(wav_path, format="wav")
 
@@ -199,7 +198,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🎤 Танылған мәтін:\n{text}"
         )
 
-        # Аудару
         await process_translation(
             update,
             context,
@@ -216,10 +214,17 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(wav_path):
             os.remove(wav_path)
 
-# ================= START =================
+# ================= START / LANGUAGE (ТІЛ ТАҢДАУ) =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🌍 Тілді таңдаңыз:",
+        "🌍 Тілді таңдаңыз / Выберите язык:",
+        reply_markup=get_language_keyboard()
+    )
+
+# Кез келген уақытта тілді өзгерту командасы
+async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🔄 Жаңа тілді таңдаңыз / Выберите новый язык:",
         reply_markup=get_language_keyboard()
     )
 
@@ -232,7 +237,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lang = query.data.split("_")[1]
         context.user_data["lang"] = lang
         await query.edit_message_text(
-            f"✅ Таңдалған тіл: {ALL_LANGUAGES[lang]}"
+            f"✅ Таңдалған тіл: {ALL_LANGUAGES[lang]}\n\nЕнді маған мәтін, сурет немесе дауыстық хабарлама жіберсеңіз болады."
         )
 
 # ================= MAIN =================
@@ -243,13 +248,12 @@ def main():
 
     app_telegram = Application.builder().token(TOKEN).build()
 
-    app_telegram.add_handler(
-        CommandHandler("start", start)
-    )
+    # Командаларды тіркеу
+    app_telegram.add_handler(CommandHandler("start", start))
+    app_telegram.add_handler(CommandHandler("language", change_language))
+    app_telegram.add_handler(CommandHandler("lang", change_language))
 
-    app_telegram.add_handler(
-        CallbackQueryHandler(callback_handler)
-    )
+    app_telegram.add_handler(CallbackQueryHandler(callback_handler))
 
     app_telegram.add_handler(
         MessageHandler(
@@ -269,12 +273,8 @@ def main():
 
     print("🤖 AI Translator Bot іске қосылды...")
     
-    # Render портты тексергенде қате бермес үшін веб-серверді қосамыз
     keep_alive()
-
-    # Ботты қосу
     app_telegram.run_polling()
 
-# ================= RUN =================
 if __name__ == "__main__":
     main()
