@@ -1,8 +1,6 @@
 services:
-  - type: web # немесе worker
+  - type: web
     name: chatbot
     runtime: python
-    buildCommand: |
-      apt-get update && apt-get install -y tesseract-ocr
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
