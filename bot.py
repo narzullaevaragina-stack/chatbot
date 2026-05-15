@@ -11,7 +11,8 @@ from flask import Flask        # Render үшін қосылды
 from telegram import (
     Update,
     InlineKeyboardButton,
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup,
+    BotCommand
 )
 
 from telegram.ext import (
@@ -54,30 +55,30 @@ ALL_LANGUAGES = {
     "tr": "Türkçe 🇹🇷",
     "de": "Deutsch 🇩🇪",
     "fr": "Français 🇫🇷",
-    "ja": "Жапония 🇯🇵",  # Жапония тілі қосылды
-    "ko": "Корея 🇰🇷",    # Корея тілі қосылды
+    "ja": "Жапония 🇯🇵",
+    "ko": "Корея 🇰🇷",
 }
 
-# ================= КНОПКА =================
+# ================= КНОПКА (ӘДЕМІ МӘЗІР) =================
 def get_language_keyboard():
-    keyboard = []
-    row = []
-
-    for code, name in ALL_LANGUAGES.items():
-        row.append(
-            InlineKeyboardButton(
-                name,
-                callback_data=f"setlang_{code}"
-            )
-        )
-
-        if len(row) == 2:
-            keyboard.append(row)
-            row = []
-
-    if row:
-        keyboard.append(row)
-
+    keyboard = [
+        [
+            InlineKeyboardButton("Қазақша 🇰🇿", callback_data="setlang_kk"),
+            InlineKeyboardButton("Русский 🇷🇺", callback_data="setlang_ru")
+        ],
+        [
+            InlineKeyboardButton("English 🇬🇧", callback_data="setlang_en"),
+            InlineKeyboardButton("Türkçe 🇹🇷", callback_data="setlang_tr")
+        ],
+        [
+            InlineKeyboardButton("Deutsch 🇩🇪", callback_data="setlang_de"),
+            InlineKeyboardButton("Français 🇫🇷", callback_data="setlang_fr")
+        ],
+        [
+            InlineKeyboardButton("Жапония 🇯🇵", callback_data="setlang_ja"),
+            InlineKeyboardButton("Корея 🇰🇷", callback_data="setlang_ko")
+        ]
+    ]
     return InlineKeyboardMarkup(keyboard)
 
 # ================= АУДАРМА =================
@@ -86,7 +87,7 @@ async def process_translation(update, context, text):
 
     if not target_lang:
         await update.message.reply_text(
-            "⚠️ Алдымен тілді таңдаңыз!",
+            "⚠️ Алдымен аудару керек тілді таңдаңыз!",
             reply_markup=get_language_keyboard()
         )
         return
@@ -97,12 +98,11 @@ async def process_translation(update, context, text):
             target=target_lang
         ).translate(text)
 
-        # Мәтінді шығару
         await update.message.reply_text(
             "🌍 Аударма:\n" + str(translated)
         )
 
-        # ====== ДАУЫСТЫҚ ЖАУАП ҚАЙТА ҚОСЫЛДЫ ======
+        # ====== ДАУЫСТЫҚ ЖАУАП ======
         tts = gTTS(
             text=translated,
             lang=target_lang
@@ -111,14 +111,11 @@ async def process_translation(update, context, text):
         voice_path = "voice.mp3"
         tts.save(voice_path)
         
-        # Дауыстық хабарламаны жіберу
         with open(voice_path, "rb") as audio:
             await update.message.reply_voice(audio)
             
-        # Уақытша файлды өшіру
         if os.path.exists(voice_path):
             os.remove(voice_path)
-        # ===============================================
 
     except Exception as e:
         await update.message.reply_text(
@@ -214,19 +211,27 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(wav_path):
             os.remove(wav_path)
 
-# ================= START / LANGUAGE (ТІЛ ТАҢДАУ) =================
+# ================= COMMANDS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🌍 Тілді таңдаңыз / Выберите язык:",
+        "👋 Сәлем! Мен AI Аудармашы ботпын.\n\n🌍 Тілді таңдаңыз / Выберите язык:",
         reply_markup=get_language_keyboard()
     )
 
-# Кез келген уақытта тілді өзгерту командасы
 async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🔄 Жаңа тілді таңдаңыз / Выберите новый язык:",
+        "🔄 Жаңа аударма тілін таңдаңыз / Выберите новый язык перевода:",
         reply_markup=get_language_keyboard()
     )
+
+# БОТТЫҢ МӘЗІР БАТЫРМАСЫН ОРНАТУ ТУРАЛЫ ФУНКЦИЯ
+async def post_init(application: Application) -> None:
+    # Бот іске қосылғанда сол жақ төменде тұратын Меню батырмаларын орнатады
+    commands = [
+        BotCommand("start", "Ботты іске қосу / Запустить бота"),
+        BotCommand("language", "Тілді өзгерту 🔄 Изменить язык")
+    ]
+    await application.bot.set_my_commands(commands)
 
 # ================= CALLBACK =================
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -237,7 +242,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lang = query.data.split("_")[1]
         context.user_data["lang"] = lang
         await query.edit_message_text(
-            f"✅ Таңдалған тіл: {ALL_LANGUAGES[lang]}\n\nЕнді маған мәтін, сурет немесе дауыстық хабарлама жіберсеңіз болады."
+            f"✅ Белсенді тіл орнатылды: {ALL_LANGUAGES[lang]}\n\n"
+            f"Енді маған кез келген уақытта мәтін, сурет немесе дауыстық хабарлама жібере беріңіз. "
+            f"Тілді ауыстыру үшін төмендегі сол жақтағы «Menu» батырмасын басыңыз."
         )
 
 # ================= MAIN =================
@@ -246,9 +253,10 @@ def main():
         print("❌ BOT_TOKEN табылмады")
         return
 
-    app_telegram = Application.builder().token(TOKEN).build()
+    # post_init функциясын қосып, батырманы автоматты тіркейміз
+    app_telegram = Application.builder().token(TOKEN).post_init(post_init).build()
 
-    # Командаларды тіркеу
+    # Командалар
     app_telegram.add_handler(CommandHandler("start", start))
     app_telegram.add_handler(CommandHandler("language", change_language))
     app_telegram.add_handler(CommandHandler("lang", change_language))
