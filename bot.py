@@ -1,4 +1,9 @@
+import sys
 import os
+
+# Жүйеге қажетті кітапханаларды және папка бағыттарын дұрыс көрсету
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import speech_recognition as sr
 from dotenv import load_dotenv
 from pydub import AudioSegment
@@ -36,11 +41,13 @@ def home():
     return "Бот сәтті іске қосылды!"
 
 def run_flask():
+    # Render талап ететін портты міндетті түрде тексеру және байланыстыру
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run_flask)
+    t.daemon = True  # Негізгі процесс тоқтағанда Flask-ты да таза жабу үшін
     t.start()
 
 # ================= ТІЛДЕР =================
@@ -129,7 +136,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"✅ Тіл орнатылды: {ALL_LANGUAGES[lang]}")
 
 def main():
-    if not TOKEN: return
+    if not TOKEN: 
+        print("ҚАТЕ: BOT_TOKEN табылмады. Environment variables тексеріңіз.")
+        return
+        
     app_tg = Application.builder().token(TOKEN).post_init(post_init).build()
     app_tg.add_handler(CommandHandler("start", start))
     app_tg.add_handler(CommandHandler("language", start))
@@ -137,7 +147,10 @@ def main():
     app_tg.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.IMAGE, handle_message))
     app_tg.add_handler(MessageHandler(filters.VOICE, handle_voice))
     
+    # Алдымен Flask серверін фондық режимде қосамыз
     keep_alive()
+    
+    # Содан кейін Telegram лонг-поллингті іске қосамыз
     app_tg.run_polling()
 
 if __name__ == "__main__":
