@@ -1,0 +1,8 @@
+python-telegram-bot
+python-dotenv
+deep-translator
+speechrecognition
+pillow
+pytesseract
+pydub
+gtts
